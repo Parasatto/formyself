@@ -1,26 +1,48 @@
--- Проверить подтипы для ДПВ
-SELECT PST.P_G_PAY_OUT_SUB_TYPE, 
-       PST.NAME_RU,
-       PST.P_G_PAY_OUT_TYPE,
-       PST.IS_PART,
-       PT.NAME_RU AS TYPE_NAME
-FROM P_G_PAY_OUT_SUB_TYPE PST
-JOIN P_G_PAY_OUT_TYPE PT ON PT.P_G_PAY_OUT_TYPE = PST.P_G_PAY_OUT_TYPE
-WHERE PST.NAME_RU LIKE '%ДПВ%'
-   OR PST.NAME_RU LIKE '%добровол%'
-ORDER BY PST.P_G_PAY_OUT_SUB_TYPE;
+FUNCTION P_GET_G_ACCOUNT_IPC
+  --------------------------------------------------------
+  -- ВОЗВРАЩАЕТ ID  СЧЕТА ИМЕННО ИПС С УЧЕТОМ МУЛЬТИПОРФЕЛЯ --
+  -- ПЕРЕДАВАЕМЫЕ ПАРАМЕТРЫ:                            --
+  -- 1. P_CONTRACT_   - ID ПЕНСИОННОГО ДОГОВОРА         --
+  -- 2. PORTFOLIO_   - ID ПОРТФЕЛЯ         --
+  -- Серик (весна 2011) --
+  --------------------------------------------------------
+    (
+    P_CONTRACT_  IN P_CONTRACT.P_CONTRACT%TYPE,
+    PORTFOLIO_   IN P_G_PORTFOLIO.P_G_PORTFOLIO%TYPE
+    )
+  RETURN G_ACCOUNT.G_ACCOUNT%TYPE IS
+    RESULT G_ACCOUNT.G_ACCOUNT%TYPE;
+  BEGIN
 
--- Проверить существующие выплаты по договорам
-SELECT PC.P_G_CONTRACT_KND,
-       CK.NAME_RU AS CONTRACT_TYPE,
-       PST.P_G_PAY_OUT_SUB_TYPE,
-       PST.NAME_RU AS SUBTYPE_NAME,
-       COUNT(*) CNT
-FROM P_CLAIM_PAY_OUT CPO
-JOIN P_CONTRACT PC ON PC.P_CONTRACT = CPO.P_CONTRACT
-JOIN P_G_CONTRACT_KND CK ON CK.P_G_CONTRACT_KND = PC.P_G_CONTRACT_KND
-JOIN P_G_PAY_OUT_SUB_TYPE PST ON PST.P_G_PAY_OUT_SUB_TYPE = CPO.P_G_PAY_OUT_SUB_TYPE
-WHERE PC.P_G_CONTRACT_KND IN (1, 10, 11, 18)
-  AND CPO.DATE_REGISTR >= ADD_MONTHS(SYSDATE, -3)
-GROUP BY PC.P_G_CONTRACT_KND, CK.NAME_RU, PST.P_G_PAY_OUT_SUB_TYPE, PST.NAME_RU
-ORDER BY PC.P_G_CONTRACT_KND, PST.P_G_PAY_OUT_SUB_TYPE;
+    BEGIN
+      SELECT PA.G_ACCOUNT
+        INTO RESULT
+        FROM P_ACC PA,
+             P_G_ACCKND PK
+       WHERE PA.P_CONTRACT = P_CONTRACT_
+         AND PA.P_G_ACCKND = PK.P_G_ACCKND
+         AND PK.P_G_PORTFOLIO = PORTFOLIO_
+         AND PK.P_G_GROUP_ACCKND in (1, 11, 16, 17, 21, 25);
+    EXCEPTION
+      WHEN TOO_MANY_ROWS THEN
+        SELECT PA.G_ACCOUNT
+          INTO RESULT
+          FROM P_ACC PA,
+               P_G_ACCKND PK
+         WHERE PA.P_CONTRACT = P_CONTRACT_
+           AND PA.P_G_ACCKND = PK.P_G_ACCKND
+           AND PK.P_G_PORTFOLIO = PORTFOLIO_
+           AND PK.P_G_CONTRACT_KND = P_GET_CONTRACT_KND(P_CONTRACT_)
+           AND PK.P_G_GROUP_ACCKND = 1;
+      WHEN NO_DATA_FOUND THEN
+        RESULT := NULL;
+      WHEN OTHERS THEN
+        RAISE TYPES.E_FORCE_EXIT;
+    END;
+    RETURN RESULT;
+  EXCEPTION
+    WHEN TYPES.E_FORCE_EXIT THEN
+      RETURN RESULT;
+    WHEN OTHERS THEN
+      RETURN RESULT;
+  END;
