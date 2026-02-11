@@ -299,7 +299,7 @@ begin
   for rec in (select *
                 from p_contract pc
                where pc.g_person_recipient = g_person_
-                 and pc.p_g_contract_knd in (decode(includeOPV_, 1,1, 18), decode(includeOPV_, 1,10, 18),decode(paymentsType_, 1, 11, NULL), 18) -- если includeOPV_!=1, то не нужно искать ОПВ
+                 and pc.p_g_contract_knd in (decode(includeOPV_, 1,1, 18), decode(includeOPV_, 1,10, 18), 11, 18) -- если includeOPV_!=1, то не нужно искать ОПВ
                  and pc.date_close is null)
   loop
     p_g_contract_knd_ := rec.p_g_contract_knd;
