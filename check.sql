@@ -1,48 +1,61 @@
-FUNCTION P_GET_G_ACCOUNT_IPC
-  --------------------------------------------------------
-  -- ВОЗВРАЩАЕТ ID  СЧЕТА ИМЕННО ИПС С УЧЕТОМ МУЛЬТИПОРФЕЛЯ --
-  -- ПЕРЕДАВАЕМЫЕ ПАРАМЕТРЫ:                            --
-  -- 1. P_CONTRACT_   - ID ПЕНСИОННОГО ДОГОВОРА         --
-  -- 2. PORTFOLIO_   - ID ПОРТФЕЛЯ         --
-  -- Серик (весна 2011) --
-  --------------------------------------------------------
-    (
-    P_CONTRACT_  IN P_CONTRACT.P_CONTRACT%TYPE,
-    PORTFOLIO_   IN P_G_PORTFOLIO.P_G_PORTFOLIO%TYPE
-    )
-  RETURN G_ACCOUNT.G_ACCOUNT%TYPE IS
-    RESULT G_ACCOUNT.G_ACCOUNT%TYPE;
+IF REC.G_CURRENCY IN (5, 12, 14) THEN
+  F72_ := SUBSTR('/ACC/' || REC.BANK_BRANCH_NAME, 1, 134);
+  
+ELSIF REC.G_CURRENCY = 15 THEN
+  DECLARE
+    vF70_Temp  VARCHAR2(500);
+    vMaxLen    NUMBER;
   BEGIN
-
-    BEGIN
-      SELECT PA.G_ACCOUNT
-        INTO RESULT
-        FROM P_ACC PA,
-             P_G_ACCKND PK
-       WHERE PA.P_CONTRACT = P_CONTRACT_
-         AND PA.P_G_ACCKND = PK.P_G_ACCKND
-         AND PK.P_G_PORTFOLIO = PORTFOLIO_
-         AND PK.P_G_GROUP_ACCKND in (1, 11, 16, 17, 21, 25);
-    EXCEPTION
-      WHEN TOO_MANY_ROWS THEN
-        SELECT PA.G_ACCOUNT
-          INTO RESULT
-          FROM P_ACC PA,
-               P_G_ACCKND PK
-         WHERE PA.P_CONTRACT = P_CONTRACT_
-           AND PA.P_G_ACCKND = PK.P_G_ACCKND
-           AND PK.P_G_PORTFOLIO = PORTFOLIO_
-           AND PK.P_G_CONTRACT_KND = P_GET_CONTRACT_KND(P_CONTRACT_)
-           AND PK.P_G_GROUP_ACCKND = 1;
-      WHEN NO_DATA_FOUND THEN
-        RESULT := NULL;
-      WHEN OTHERS THEN
-        RAISE TYPES.E_FORCE_EXIT;
-    END;
-    RETURN RESULT;
-  EXCEPTION
-    WHEN TYPES.E_FORCE_EXIT THEN
-      RETURN RESULT;
-    WHEN OTHERS THEN
-      RETURN RESULT;
+    vF70_Temp := NVL(F70_PAY_ASSIGN_, REC.F70_PAY_ASSIGN);
+    vMaxLen := CASE WHEN REC.G_COUNTRY_CODE = 'BLR' THEN 128 ELSE 130 END;
+    
+    IF LENGTH(vF70_Temp) > vMaxLen THEN
+      -- ✅ ПРАВИЛЬНО: обрезаем F70
+      F70_PAY_ASSIGN_ := SUBSTR(vF70_Temp, 1, vMaxLen);
+      -- ✅ ПРАВИЛЬНО: остаток в F72
+      F72_ := SUBSTR('/NZP/' || SUBSTR(vF70_Temp, vMaxLen + 1), 1, 63);
+      
+      -- Логирование
+      main.pp_Save_ERROR('F70_F72_OVERFLOW P_CLAIM_PAY_OUT[' || REC.P_CLAIM_PAY_OUT || 
+                        '] LEN[' || LENGTH(vF70_Temp) || '] LIMIT[' || vMaxLen || ']');
+    ELSE
+      F72_ := NULL;
+    END IF;
   END;
+ELSE
+  F72_ := NULL;
+END IF;
+
+
+
+SELECT 
+  O.O_MT103,
+  O.P_CLAIM_PAY_OUT,
+  GC.CODE AS COUNTRY_CODE,
+  LENGTH(O.F70_PAY_ASSIGN) AS F70_LEN,
+  SUBSTR(O.F70_PAY_ASSIGN, 1, 50) AS F70_START,
+  O.F72,
+  CASE 
+    WHEN GC.CODE = 'BLR' AND LENGTH(O.F70_PAY_ASSIGN) > 128 THEN '⚠️ OVERFLOW'
+    WHEN GC.CODE != 'BLR' AND LENGTH(O.F70_PAY_ASSIGN) > 130 THEN '⚠️ OVERFLOW'
+    ELSE 'OK'
+  END AS STATUS
+FROM MAIN.O_MT103 O
+JOIN MAIN.P_CLAIM_PAY_OUT CP ON O.P_CLAIM_PAY_OUT = CP.P_CLAIM_PAY_OUT
+LEFT JOIN MAIN.G_COUNTRY GC ON CP.BANK_COUNTRY = GC.G_COUNTRY
+WHERE O.FCURR_CODE = 'RUB'
+  AND O.FCURR_DATE >= TRUNC(SYSDATE) - 7
+ORDER BY O.FCURR_DATE DESC;
+
+CREATE TABLE MAIN.LOG_F70_F72_OVERFLOW (
+  LOG_ID          NUMBER PRIMARY KEY,
+  LOG_DATE        DATE,
+  P_CLAIM_PAY_OUT NUMBER,
+  COUNTRY_CODE    VARCHAR2(10),
+  F70_ORIGINAL    VARCHAR2(500),
+  F70_LENGTH      NUMBER,
+  F70_FINAL       VARCHAR2(200),
+  F72             VARCHAR2(200)
+);
+
+CREATE SEQUENCE MAIN.SEQ_LOG_F70_F72 START WITH 1;
