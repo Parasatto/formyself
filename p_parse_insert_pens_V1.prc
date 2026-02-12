@@ -1615,7 +1615,7 @@ begin
                P_CONTRACT_OPPV,
                P_CLALIM_PAY_OUT_OPPV,            -- 22
                P_CONTRACT_DPV,
-               P_CLAIM_PAY_OUT_DPV,
+               P_CLAIM_PAY_OUT_DPV
              , PAYMENTSTYPE    -- 15.12.2023
              , INCLUDEOPV
              , G_PERSON
@@ -1646,7 +1646,7 @@ begin
                NULL,
                NULL,
                NULL,
-             , DECODE(IS_PAYMENTSTYPE_WRONG_, 2, NULL, REC_DETAIL.PAYMENTSTYPE)
+               DECODE(IS_PAYMENTSTYPE_WRONG_, 2, NULL, REC_DETAIL.PAYMENTSTYPE)
              , DECODE(IS_includeOPV_WRONG_, 2, NULL, REC_DETAIL.INCLUDEOPV)
              , G_PERSON_
              , ERRCODE
@@ -2209,7 +2209,7 @@ begin
             P_CLALIM_PAY_OUT_OPPV_  := P_CLAIM_PAY_OUT_;
           elsif P_G_CONTRACT_KND_ = 11 then
             P_CONTRACT_DPV_        := P_CONTRACTARR_(I);
-            P_CLALIM_PAY_OUT_DPV_  := P_CLAIM_PAY_OUT_;
+            P_CLAIM_PAY_OUT_DPV_  := P_CLAIM_PAY_OUT_;
           end if;
         end loop;
       end if;
@@ -2328,11 +2328,11 @@ begin
                                  ERR_MSG => ERR_MSG_);
           end if;
           -- ÁÛÂÀÅÒ ×ÒÎ ÅÑÒÜ ÄÎÃÎÂÎÐÀ ÄÏÂ ÈÕ ÒÎÆÅ ÍÀÄÎ ÎÒÏÐÀÂÈÒÜ Â Î×ÅÐÅÄÜ
-          if P_CLALIM_PAY_OUT_DPV_ IS NOT NULL then
+          if P_CLAIM_PAY_OUT_DPV_ IS NOT NULL then
              P_INS_LT_GBDFL_PENS(V_IIN => REC_DETAIL.IIN,
                                  V_G_PERSON => G_PERSON_,
                                  V_STATUS => 0,
-                                 V_CLAIM_PAY_OUT => P_CLALIM_PAY_OUT_DPV_,
+                                 V_CLAIM_PAY_OUT => P_CLAIM_PAY_OUT_DPV_,
                                  V_INGOING_PARSED_PENS => P_INGOING_PARSED_PENS_,
                                  ERR_CODE => ERR_CODE_,
                                  ERR_MSG => ERR_MSG_);
